@@ -1,9 +1,10 @@
-clc;
 clear;
+clc;
 close all;
 
-disp('========================================');
-disp('      COMPLEX ENGINEERING PROBLEM     ');
-disp('========================================');
-disp('Comparative SAR Image Reconstruction');
-disp('Project initialized successfully.');
+addpath(genpath('src'));
+
+radar = initRadarParameters();
+
+disp('Radar Parameters');
+disp(radar);
