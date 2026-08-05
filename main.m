@@ -1,6 +1,7 @@
 clear;
 clc;
 close all;
+disp('*** NEW MAIN IS RUNNING ***');
 
 %% Add project folders to MATLAB path
 addpath(genpath('src'));
@@ -14,6 +15,12 @@ radar = initRadarParameters();
 %% Generate Target Scene
 targets = generateTargetScene();
 
+%% Generate Platform Trajectory
+platform = generatePlatformTrajectory(radar);
+
+%% Generate Raw SAR data
+rawData = generateRawSARData(radar, platform, targets, tx);
+
 %% Simulate Received Echo
 [rx, delay] = simulateEcho(radar, targets, tx);
 
@@ -26,6 +33,12 @@ disp(radar);
 
 disp('Target Scene');
 disp(targets);
+
+disp('Platform Information');
+disp(platform);
+
+disp('Raw SAR Data Generated');
+disp(size(rawData));
 
 fprintf('Round-trip Delay = %.6f microseconds\n', delay*1e6);
 
@@ -93,3 +106,35 @@ ylabel('Magnitude');
 title('Range Compressed Signal');
 
 grid on;
+
+%% ==========================================================
+%% Figure 5 : Platform Trajectory
+%% ==========================================================
+
+figure;
+
+plot(platform.x,...
+     platform.z,...
+     'LineWidth',2);
+
+xlabel('Along Track Position (m)');
+ylabel('Altitude (m)');
+
+title('Radar Platform Trajectory');
+
+grid on;
+
+%% ==========================================================
+%% Figure 6 : Raw SAR Data Matrix
+%% ==========================================================
+
+figure;
+
+imagesc(20*log10(abs(rawData) + eps));
+
+xlabel('Fast-Time Samples');
+ylabel('Pulse Number');
+title('Raw SAR Data Matrix (dB)');
+
+colorbar;
+axis xy;

@@ -39,7 +39,7 @@ radar.rangeResolution = radar.c/(2*radar.B);
 % Azimuth Resolution (approx.)
 radar.azimuthResolution = radar.La/2;
 % Maximum observable range
-radar.maxRange = 5000;      % meters
+radar.maxRange = 8000;      % meters
 
 % Fast-time observation window
 radar.fastTime = 2*radar.maxRange/radar.c;
