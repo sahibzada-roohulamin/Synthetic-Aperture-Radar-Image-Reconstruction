@@ -13,17 +13,22 @@ for k = 1:platform.numPulses
              radar.H^2);
 
     % Round-trip delay
-    delay = 2*R/radar.c;
+    delay = 2 * R / radar.c;
 
     % Delay in samples
-    delaySamples = round(delay*radar.fs);
+    delaySamples = round(delay * radar.fs);
 
+    % Azimuth-dependent carrier phase history
+    phaseHistory = exp(-1j * 4 * pi * radar.fc * R / radar.c);
+
+    % Length of transmitted chirp
     L = length(tx);
 
+    % Insert delayed, phase-modulated echo
     if (delaySamples + L - 1) <= radar.Nfast
 
         rawData(k, delaySamples+1:delaySamples+L) = ...
-            targets.rcs * tx;
+            targets.rcs * phaseHistory * tx;
 
     end
 

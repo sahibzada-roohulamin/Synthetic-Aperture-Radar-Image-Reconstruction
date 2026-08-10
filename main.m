@@ -21,6 +21,19 @@ platform = generatePlatformTrajectory(radar);
 %% Generate Raw SAR data
 rawData = generateRawSARData(radar, platform, targets, tx);
 
+%% Range Compression of Raw SAR Data
+rangeCompressedSAR = zeros(size(rawData));
+
+for k = 1:size(rawData,1)
+    rangeCompressedSAR(k,:) = ...
+        rangeCompression(tx, rawData(k,:));
+end
+
+%% Azimuth Compression
+
+focusedSAR = azimuthCompression( ...
+    rangeCompressedSAR, radar, platform, targets);
+
 %% Simulate Received Echo
 [rx, delay] = simulateEcho(radar, targets, tx);
 
@@ -138,3 +151,37 @@ title('Raw SAR Data Matrix (dB)');
 
 colorbar;
 axis xy;
+
+%% ==========================================================
+%% Figure 7 : Range-Compressed SAR Data
+%% ==========================================================
+figure;
+imagesc(20*log10(abs(rangeCompressedSAR) + eps));
+xlabel('Fast-Time Samples');
+ylabel('Pulse Number');
+title('Range-Compressed SAR Data (dB)');
+colorbar;
+axis xy;
+%% ==========================================================
+%% Figure 8 : Focused SAR Image
+%% ==========================================================
+figure;
+imagesc(20*log10(abs(focusedSAR) + eps));
+xlabel('Fast-Time Samples');
+ylabel('Pulse Number');
+title('Focused SAR Image (dB)');
+colorbar;
+axis xy;
+
+%% ==========================================================
+%% Azimuth Compression Verification
+%% ==========================================================
+[maxFocused, linearIndex] = max(abs(focusedSAR(:)));
+
+[peakAzimuth, peakRange] = ind2sub( ...
+    size(focusedSAR), linearIndex);
+
+fprintf('\n===== SAR IMAGE FOCUSING RESULTS =====\n');
+fprintf('Maximum focused magnitude = %.6f\n', maxFocused);
+fprintf('Peak azimuth sample       = %d\n', peakAzimuth);
+fprintf('Peak range sample         = %d\n', peakRange);
