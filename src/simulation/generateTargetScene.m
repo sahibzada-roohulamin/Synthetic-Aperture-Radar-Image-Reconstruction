@@ -1,13 +1,13 @@
 function targets = generateTargetScene()
 
 % Number of targets
-targets.numTargets = 1;
+targets.numTargets = 3;
 
 % Target coordinates (meters)
-targets.x = 0;
-targets.y = 1000;
+targets.x = [-500, 0, 500];
+targets.y = [1000, 1500, 1000];
 
-% Reflectivity
-targets.rcs = 1;
+% Reflectivity / RCS
+targets.rcs = [1, 1, 1];
 
 end

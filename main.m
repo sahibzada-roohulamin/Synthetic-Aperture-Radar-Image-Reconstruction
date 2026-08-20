@@ -53,7 +53,11 @@ disp(platform);
 disp('Raw SAR Data Generated');
 disp(size(rawData));
 
-fprintf('Round-trip Delay = %.6f microseconds\n', delay*1e6);
+fprintf('\nRound-trip Delays:\n');
+for k = 1:targets.numTargets
+    fprintf('Target %d: %.6f microseconds\n', ...
+        k, delay(k)*1e6);
+end
 
 %% ==========================================================
 %% Figure 1 : Transmitted LFM Chirp
@@ -234,13 +238,13 @@ fprintf('Peak slant range = %.6f m\n', ...
     rangeAxis(peakRange));
 
 % Calculate theoretical target range directly
-R_theoretical = sqrt( ...
-    (platform.x - targets.x).^2 + ...
-    targets.y^2 + ...
-    radar.H^2);
-
-fprintf('Theoretical minimum target range = %.6f m\n', ...
-    min(R_theoretical));
+% R_theoretical = sqrt( ...
+%   (platform.x - targets.x).^2 + ...
+%    targets.y^2 + ...
+%    radar.H^2);
+%
+% fprintf('Theoretical minimum target range = %.6f m\n', ...
+  %  min(R_theoretical));
 
 %% ==========================================================
 %% Azimuth Compression Verification

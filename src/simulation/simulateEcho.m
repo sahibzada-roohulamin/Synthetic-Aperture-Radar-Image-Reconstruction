@@ -1,25 +1,43 @@
 function [rx, delay] = simulateEcho(radar, targets, tx)
 
-% Distance to target
-R = sqrt(targets.x^2 + targets.y^2);
+% Number of fast-time samples
+Nfast = radar.Nfast;
 
-% Round-trip delay
-delay = 2*R/radar.c;
+% Initialize received signal
+rx = zeros(1, Nfast);
 
-% Delay in samples
-delaySamples = round(delay * radar.fs);
+% Initialize target delays
+delay = zeros(targets.numTargets, 1);
 
-% Fast-time observation window
-rx = zeros(1, radar.Nfast);
+% ==========================================================
+% Simulate echo from each target
+% ==========================================================
 
-% Length of transmitted pulse
-L = length(tx);
+for k = 1:targets.numTargets
 
-% Insert delayed echo
-if (delaySamples + L - 1) <= radar.Nfast
+    % Target coordinates
+    xt = targets.x(k);
+    yt = targets.y(k);
 
-    rx(delaySamples+1 : delaySamples+L) = ...
-        targets.rcs * tx;
+    % Slant range
+    R = sqrt(xt^2 + yt^2 + radar.H^2);
+
+    % Two-way propagation delay
+    delay(k) = 2 * R / radar.c;
+
+    % Corresponding fast-time sample
+    delaySamples = round(delay(k) * radar.fs) + 1;
+
+    % Add target echo
+    if delaySamples >= 1 && delaySamples <= Nfast
+
+        % Use transmitted signal at the corresponding sample
+        if delaySamples <= length(tx)
+            rx(delaySamples) = rx(delaySamples) + ...
+                targets.rcs(k) * tx(delaySamples);
+        end
+
+    end
 
 end
 

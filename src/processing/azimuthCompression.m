@@ -1,37 +1,96 @@
 function focusedSAR = azimuthCompression(rangeCompressedSAR, radar, platform, targets)
 
-% Number of pulses
-numPulses = platform.numPulses;
-
 % ==========================================================
-% Azimuth phase history
+% Multi-Target Azimuth Compression
 % ==========================================================
 
-R = sqrt((platform.x - targets.x).^2 + ...
-         targets.y^2 + ...
-         radar.H^2);
+[Naz, Nrange] = size(rangeCompressedSAR);
 
-azimuthReference = exp( ...
-    -1j * 4 * pi * radar.fc * R / radar.c);
+% Initialize focused SAR image
+focusedSAR = zeros(Naz, Nrange);
 
 % ==========================================================
-% Azimuth matched filter
+% Process each target
 % ==========================================================
 
-matchedFilter = conj(fliplr(azimuthReference));
+for k = 1:targets.numTargets
 
-% ==========================================================
-% Azimuth compression
-% ==========================================================
+    % Target coordinates
+    xt = targets.x(k);
+    yt = targets.y(k);
 
-focusedSAR = zeros(size(rangeCompressedSAR));
+    % ------------------------------------------------------
+    % Slant-range history for this target
+    % ------------------------------------------------------
 
-for n = 1:size(rangeCompressedSAR,2)
+    R = sqrt((platform.x - xt).^2 + ...
+             yt^2 + ...
+             radar.H^2);
 
-    focusedSAR(:,n) = ...
-        conv(rangeCompressedSAR(:,n), ...
-             matchedFilter, ...
-             'same');
+    % ------------------------------------------------------
+    % Corresponding range-bin history
+    % ------------------------------------------------------
+
+    tau = 2 * R / radar.c;
+
+    rangeBins = round(tau * radar.fs) + 1;
+
+    % ------------------------------------------------------
+    % Azimuth phase history
+    % ------------------------------------------------------
+
+    phaseHistory = exp( ...
+        -1j * 4 * pi * radar.fc * R / radar.c);
+
+    % Matched filter
+    matchedFilter = conj(phaseHistory(:));
+
+    % ------------------------------------------------------
+    % Extract target azimuth signal
+    % ------------------------------------------------------
+
+    targetSignal = zeros(Naz,1);
+
+    for p = 1:Naz
+
+        bin = rangeBins(p);
+
+        if bin >= 1 && bin <= Nrange
+            targetSignal(p) = ...
+                rangeCompressedSAR(p,bin);
+        end
+
+    end
+
+    % ------------------------------------------------------
+    % Azimuth compression
+    % ------------------------------------------------------
+
+    targetFocused = conv( ...
+        targetSignal, ...
+        matchedFilter, ...
+        'same');
+
+    % ------------------------------------------------------
+    % Determine target's nominal range bin
+    % ------------------------------------------------------
+
+    R0 = sqrt(xt^2 + yt^2 + radar.H^2);
+
+    nominalBin = round( ...
+        (2 * R0 / radar.c) * radar.fs) + 1;
+
+    % ------------------------------------------------------
+    % Place focused response into image
+    % ------------------------------------------------------
+
+    if nominalBin >= 1 && nominalBin <= Nrange
+
+        focusedSAR(:,nominalBin) = ...
+            focusedSAR(:,nominalBin) + ...
+            targets.rcs(k) * targetFocused;
+
+    end
 
 end
 

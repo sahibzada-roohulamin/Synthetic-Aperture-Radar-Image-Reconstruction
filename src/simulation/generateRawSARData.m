@@ -1,34 +1,95 @@
 function rawData = generateRawSARData(radar, platform, targets, tx)
 
-rawData = zeros(platform.numPulses, radar.Nfast);
+% ==========================================================
+% Generate Multi-Target Raw SAR Data
+% ==========================================================
 
-for k = 1:platform.numPulses
+% Number of azimuth positions
+Naz = length(platform.x);
 
-    % Radar position
-    xr = platform.x(k);
+% Number of fast-time samples
+Nfast = length(radar.tFast);
 
-    % Distance from radar to target
-    R = sqrt((xr - targets.x)^2 + ...
-             targets.y^2 + ...
-             radar.H^2);
+% Initialize raw SAR data
+rawData = zeros(Naz, Nfast);
 
-    % Round-trip delay
-    delay = 2 * R / radar.c;
+% Length of transmitted chirp
+Ntx = length(tx);
 
-    % Delay in samples
-    delaySamples = round(delay * radar.fs);
+% ==========================================================
+% Loop over platform positions
+% ==========================================================
 
-    % Azimuth-dependent carrier phase history
-    phaseHistory = exp(-1j * 4 * pi * radar.fc * R / radar.c);
+for n = 1:Naz
 
-    % Length of transmitted chirp
-    L = length(tx);
+    % Radar platform position
+    xr = platform.x(n);
+    zr = platform.z(n);
 
-    % Insert delayed, phase-modulated echo
-    if (delaySamples + L - 1) <= radar.Nfast
+    % ======================================================
+    % Loop over targets
+    % ======================================================
 
-        rawData(k, delaySamples+1:delaySamples+L) = ...
-            targets.rcs * phaseHistory * tx;
+    for k = 1:targets.numTargets
+
+        % Target coordinates
+        xt = targets.x(k);
+        yt = targets.y(k);
+
+        % --------------------------------------------------
+        % Slant range
+        % --------------------------------------------------
+
+        R = sqrt( ...
+            (xr - xt)^2 + ...
+            yt^2 + ...
+            zr^2);
+
+        % --------------------------------------------------
+        % Two-way propagation delay
+        % --------------------------------------------------
+
+        tau = 2 * R / radar.c;
+
+        % --------------------------------------------------
+        % Convert delay to samples
+        % --------------------------------------------------
+
+        delaySamples = round(tau * radar.fs);
+
+        startIndex = delaySamples + 1;
+        endIndex = startIndex + Ntx - 1;
+
+        % --------------------------------------------------
+        % Propagation phase
+        % --------------------------------------------------
+
+        phase = exp( ...
+            -1j * 4 * pi * radar.fc * R / radar.c);
+
+        % --------------------------------------------------
+        % Add delayed LFM chirp
+        % --------------------------------------------------
+
+        if startIndex <= Nfast && endIndex >= 1
+
+            txStart = max(1, 2 - startIndex);
+            txEnd = min(Ntx, Nfast - startIndex + 1);
+
+            rawStart = max(1, startIndex);
+            rawEnd = min(Nfast, endIndex);
+
+            if txStart <= txEnd && rawStart <= rawEnd
+
+                rawData(n,rawStart:rawEnd) = ...
+                    rawData(n,rawStart:rawEnd) + ...
+                    targets.rcs(k) * ...
+                    phase * ...
+                    tx(txStart:txEnd);
+
+            end
+
+        end
 
     end
 
