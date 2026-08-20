@@ -4,7 +4,7 @@ function targets = generateTargetScene()
 targets.numTargets = 3;
 
 % Target coordinates (meters)
-targets.x = [-500, 0, 500];
+targets.x = [-15, 0, 15];
 targets.y = [1000, 1500, 1000];
 
 % Reflectivity / RCS

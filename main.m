@@ -32,7 +32,7 @@ end
 %% Azimuth Compression
 
 focusedSAR = azimuthCompression( ...
-    rangeCompressedSAR, radar, platform, targets);
+    rangeCompressedSAR, radar, platform, targets, tx);
 
 %% Simulate Received Echo
 [rx, delay] = simulateEcho(radar, targets, tx);
@@ -277,9 +277,36 @@ azimuthWidthSamples = ...
 azimuthResolutionMeasured = ...
     azimuthWidthSamples * platform.pulseSpacing;
 
+% Theoretical azimuth resolution based on the
+% actual simulated synthetic aperture
+targetRangeForAzimuth = rangeAxis(peakRange);
+
+syntheticApertureLength = ...
+    platform.apertureLength;
+
+theoreticalAzimuthResolution = ...
+    radar.lambda * targetRangeForAzimuth / ...
+    (2 * syntheticApertureLength);
+
+% Approximate theoretical 3-dB width
+theoreticalAzimuth3dB = ...
+    0.886 * theoreticalAzimuthResolution;
+
 fprintf('\n===== AZIMUTH RESOLUTION =====\n');
-fprintf('3-dB width = %d samples\n', azimuthWidthSamples);
-fprintf('Measured azimuth resolution = %.6f m\n', ...
+
+fprintf('Synthetic aperture length = %.6f m\n', ...
+    syntheticApertureLength);
+
+fprintf('Theoretical azimuth resolution = %.6f m\n', ...
+    theoreticalAzimuthResolution);
+
+fprintf('Theoretical 3-dB width = %.6f m\n', ...
+    theoreticalAzimuth3dB);
+
+fprintf('3-dB width = %d samples\n', ...
+    azimuthWidthSamples);
+
+fprintf('Measured 3-dB width = %.6f m\n', ...
     azimuthResolutionMeasured);
 
 %% ==========================================================
@@ -375,6 +402,106 @@ title('Focused Azimuth Response');
 grid on;
 
 ylim([-40 5]);
+
+%% ==========================================================
+%% Figure 12 : Equal-Range Target Azimuth Response
+%% ==========================================================
+
+% Calculate theoretical slant range of Target 1 / Target 3
+target13Range = sqrt( ...
+    targets.x(1)^2 + ...
+    targets.y(1)^2 + ...
+    radar.H^2);
+
+% Find the closest range bin in the focused SAR image
+[~, target13RangeBin] = min( ...
+    abs(rangeAxis - target13Range));
+
+% Extract azimuth response at Target 1 / Target 3 range
+azimuthResponse13 = ...
+    abs(focusedSAR(:,target13RangeBin));
+
+% Normalize
+azimuthResponse13 = ...
+    azimuthResponse13 / max(azimuthResponse13);
+
+% Convert to dB
+azimuthResponse13dB = ...
+    20*log10(azimuthResponse13 + eps);
+
+% Display range-bin information
+fprintf('\n===== EQUAL-RANGE TARGET AZIMUTH TEST =====\n');
+
+fprintf('Target 1 theoretical range = %.6f m\n', ...
+    target13Range);
+
+fprintf('Target 3 theoretical range = %.6f m\n', ...
+    target13Range);
+
+fprintf('Selected range bin = %d\n', ...
+    target13RangeBin);
+
+fprintf('Selected range = %.6f m\n', ...
+    rangeAxis(target13RangeBin));
+
+% Expected target positions
+fprintf('Expected Target 1 position = %.6f m\n', ...
+    targets.x(1));
+
+fprintf('Expected Target 3 position = %.6f m\n', ...
+    targets.x(3));
+
+% ----------------------------------------------------------
+% Find local azimuth peaks
+% ----------------------------------------------------------
+
+localPeaks = islocalmax(azimuthResponse13);
+
+peakIndices = find(localPeaks);
+
+% Keep only significant peaks above -10 dB
+significantPeaks = ...
+    peakIndices(azimuthResponse13(peakIndices) >= 10^(-10/20));
+
+fprintf('\nSignificant azimuth peaks above -10 dB:\n');
+
+for k = 1:length(significantPeaks)
+
+    fprintf('Peak %d: position = %.6f m, magnitude = %.2f dB\n', ...
+        k, ...
+        azimuthAxis(significantPeaks(k)), ...
+        azimuthResponse13dB(significantPeaks(k)));
+
+end
+
+% ----------------------------------------------------------
+% Figure 12
+% ----------------------------------------------------------
+
+figure;
+
+plot(azimuthAxis, ...
+     azimuthResponse13dB, ...
+     'LineWidth',1.5);
+
+xlabel('Along-Track Position (m)');
+ylabel('Normalized Magnitude (dB)');
+
+title('Equal-Range Target Azimuth Response');
+
+grid on;
+
+ylim([-40 5]);
+
+xlim([min(azimuthAxis) max(azimuthAxis)]);
+
+hold on;
+
+% Mark expected target locations
+xline(targets.x(1), '--');
+xline(targets.x(3), '--');
+
+hold off;
 
 %% ==========================================================
 %% Refined Peak Sidelobe Ratio (PSLR)
@@ -721,5 +848,22 @@ else
 
     fprintf('\n===== AZIMUTH ISLR =====\n');
     fprintf('Could not identify mainlobe boundaries.\n');
+
+end
+fprintf('\n===== TARGET RANGE BINS =====\n');
+
+for k = 1:targets.numTargets
+
+    R0 = sqrt( ...
+        targets.x(k)^2 + ...
+        targets.y(k)^2 + ...
+        radar.H^2);
+
+    rawBin = round((2*R0/radar.c)*radar.fs) + 1;
+
+    compressedBin = rawBin + floor((length(tx)-1)/2);
+
+    fprintf('Target %d: x = %.1f m, y = %.1f m, R = %.3f m, compressed bin = %d\n', ...
+        k, targets.x(k), targets.y(k), R0, compressedBin);
 
 end

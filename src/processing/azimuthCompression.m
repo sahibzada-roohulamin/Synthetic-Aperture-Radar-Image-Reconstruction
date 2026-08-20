@@ -1,7 +1,8 @@
-function focusedSAR = azimuthCompression(rangeCompressedSAR, radar, platform, targets)
+function focusedSAR = azimuthCompression( ...
+    rangeCompressedSAR, radar, platform, targets, tx)
 
 % ==========================================================
-% Multi-Target Azimuth Compression
+% 2-D SAR Image Formation using Optimized Backprojection
 % ==========================================================
 
 [Naz, Nrange] = size(rangeCompressedSAR);
@@ -10,87 +11,151 @@ function focusedSAR = azimuthCompression(rangeCompressedSAR, radar, platform, ta
 focusedSAR = zeros(Naz, Nrange);
 
 % ==========================================================
-% Process each target
+% Range-compression alignment
 % ==========================================================
 
-for k = 1:targets.numTargets
+Ntx = length(tx);
 
-    % Target coordinates
-    xt = targets.x(k);
-    yt = targets.y(k);
+compressionOffset = floor((Ntx - 1)/2);
+
+% ==========================================================
+% Physical range axis
+% ==========================================================
+
+sampleIndex = 0:Nrange-1;
+
+rangeAxis = ...
+    (sampleIndex - compressionOffset) / ...
+    radar.fs * radar.c/2;
+
+% ==========================================================
+% Image formation range region
+% ==========================================================
+
+Rtarget = sqrt( ...
+    targets.x.^2 + ...
+    targets.y.^2 + ...
+    radar.H^2);
+
+minRange = min(Rtarget) - 100;
+maxRange = max(Rtarget) + 100;
+
+validRange = ...
+    rangeAxis >= minRange & ...
+    rangeAxis <= maxRange;
+
+rangeIndices = find(validRange);
+
+% ==========================================================
+% Create image only over required range region
+% ==========================================================
+
+imageData = zeros(Naz, length(rangeIndices));
+
+% ==========================================================
+% Backprojection
+% ==========================================================
+
+for ia = 1:Naz
+
+    % Current image azimuth position
+    xImage = platform.x(ia);
+
+    % Current range coordinates
+    R0 = rangeAxis(rangeIndices);
 
     % ------------------------------------------------------
-    % Slant-range history for this target
+    % Convert slant range to ground range
     % ------------------------------------------------------
 
-    R = sqrt((platform.x - xt).^2 + ...
-             yt^2 + ...
-             radar.H^2);
+    ySquared = ...
+        R0.^2 - xImage^2 - radar.H^2;
+
+    valid = ySquared > 0;
+
+    yImage = zeros(size(R0));
+
+    yImage(valid) = sqrt(ySquared(valid));
 
     % ------------------------------------------------------
-    % Corresponding range-bin history
+    % Calculate range history for every platform position
+    % and every image range point
+    %
+    % Matrix:
+    %     Naz × NimageRange
     % ------------------------------------------------------
 
-    tau = 2 * R / radar.c;
+    dx = platform.x(:) - xImage;
 
-    rangeBins = round(tau * radar.fs) + 1;
-
-    % ------------------------------------------------------
-    % Azimuth phase history
-    % ------------------------------------------------------
-
-    phaseHistory = exp( ...
-        -1j * 4 * pi * radar.fc * R / radar.c);
-
-    % Matched filter
-    matchedFilter = conj(phaseHistory(:));
+    R = sqrt( ...
+        dx.^2 + ...
+        yImage.^2 + ...
+        platform.z(:).^2);
 
     % ------------------------------------------------------
-    % Extract target azimuth signal
+    % Convert range history to compressed range bins
     % ------------------------------------------------------
 
-    targetSignal = zeros(Naz,1);
+    compressedBins = ...
+        (2 * R / radar.c) * radar.fs + ...
+        1 + compressionOffset;
+
+    % ------------------------------------------------------
+    % Coherent accumulation
+    % ------------------------------------------------------
+
+    pixelData = zeros(1,length(rangeIndices));
 
     for p = 1:Naz
 
-        bin = rangeBins(p);
+        bins = compressedBins(p,:);
 
-        if bin >= 1 && bin <= Nrange
-            targetSignal(p) = ...
-                rangeCompressedSAR(p,bin);
+        validBins = ...
+            bins >= 1 & bins <= Nrange;
+
+        if any(validBins)
+
+            % Interpolate the complete pulse at once
+            signalValues = interp1( ...
+                1:Nrange, ...
+                rangeCompressedSAR(p,:), ...
+                bins(validBins), ...
+                'linear', ...
+                0);
+
+            % Phase compensation
+            phaseCorrection = exp( ...
+                1j * 4 * pi * radar.fc * R(p,validBins) / radar.c);
+
+            % Coherent accumulation
+            pixelData(validBins) = ...
+                pixelData(validBins) + ...
+                signalValues .* phaseCorrection;
+
         end
 
     end
 
-    % ------------------------------------------------------
-    % Azimuth compression
-    % ------------------------------------------------------
+    imageData(ia,:) = pixelData;
 
-    targetFocused = conv( ...
-        targetSignal, ...
-        matchedFilter, ...
-        'same');
+end
 
-    % ------------------------------------------------------
-    % Determine target's nominal range bin
-    % ------------------------------------------------------
+% ==========================================================
+% Insert image into full SAR matrix
+% ==========================================================
 
-    R0 = sqrt(xt^2 + yt^2 + radar.H^2);
+focusedSAR(:,rangeIndices) = imageData;
 
-    nominalBin = round( ...
-        (2 * R0 / radar.c) * radar.fs) + 1;
+% ==========================================================
+% Normalize focused image
+% ==========================================================
 
-    % ------------------------------------------------------
-    % Place focused response into image
-    % ------------------------------------------------------
+maxValue = max(abs(focusedSAR(:)));
 
-    if nominalBin >= 1 && nominalBin <= Nrange
+if maxValue > 0
 
-        focusedSAR(:,nominalBin) = ...
-            focusedSAR(:,nominalBin) + ...
-            targets.rcs(k) * targetFocused;
-
-    end
+    focusedSAR = ...
+        focusedSAR / maxValue;
 
 end
 
